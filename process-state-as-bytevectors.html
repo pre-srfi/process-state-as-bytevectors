@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SRFI nnn: Process state as bytevectors</title>
+  <meta name="viewport" content=
+  "width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/srfi.css" type="text/css">
+  <link href="/favicon.png" rel="icon" sizes="192x192" type=
+  "image/png">
+</head>
+<body>
+  <h1>SRFI nnn: Process state as bytevectors</h1>
+  <h2>Author</h2>
+  <p>Lassi Kortela</p>
+  <h2>Status</h2>
+  <h2>Abstract</h2>
+  <p>SRFI 98 and 193 give high-level access to environment
+  variables and the command line, respectively. This SRFI gives
+  byte-level access to that information as well as the current
+  directory and the executable filename.</p>
+  <h2>Table of contents</h2>
+  <h2>Rationale</h2>
+  <h2>Specification</h2>
+  <h3>Error handling</h3>
+  <p>The procedures in this SRFI raise exceptions on error. OS
+  errors are represented as SRFI 198 <em>foreign error</em>
+  objects.</p>
+  <h3>Null terminators</h3>
+  <p>Many OS interfaces are based on the C programming language
+  convention of null terminators. In particular,</p>
+  <ul>
+    <li>A <code>char*</code> or <code>wchar_t*</code> string is
+    terminated by a null character.</li>
+    <li>A <code>char**</code> or <code>wchar_t**</code> string list
+    is terminated by a null pointer.</li>
+  </ul>
+  <p>Scheme knows the boundaries of each list, vector and string at
+  the language level. Hence there is no need to carry the null
+  terminators from C into Scheme. All procedures in this SRFI omit
+  null terminators.</p>
+  <h3>Current directory</h3>
+  <p>(<strong>os-current-directory-as-bytevector</strong>) ⇒
+  <em>bytevector</em></p>
+  <p>Returns the current working directory of ths OS process as a
+  bytevector.</p>
+  <p>This is different from the thread-local current directory that
+  some Scheme implementations have.</p>
+  <ul>
+    <li>On Unix, use <code>getcwd()</code>.</li>
+    <li>On Windows NT, use
+    <code>GetCurrentDirectoryW()</code>.</li>
+  </ul>
+  <h3>Environment variables</h3>
+  <p>(<strong>os-environment-variable-as-bytevector</strong>
+  <em>bytevector</em>) ⇒ <em>bytevector?</em></p>
+  <p>Returns the current value of the given environment variable as
+  a bytevector.</p>
+  <p>The <em>bytevector</em> argument gives the name of the
+  environment variable as a bytevector.</p>
+  <p>If the variable is undefined, <code>#f</code> is returned. If
+  the OS cannot distinguish between an undefined variable and a
+  variable defined with a zero-length value, both cases return
+  <code>#f</code>. If the distinction can be made, a zero-length
+  value returns a zero-length bytevector.</p>
+  <ul>
+    <li>On Unix, use <code>getenv()</code>.</li>
+    <li>On Windows NT, use
+    <code>GetEnvironmentVariableW()</code>.</li>
+  </ul>
+  <p>(<strong>os-environment-variables-as-bytevectors</strong>) ⇒
+  <em>list of (bytevector . bytevector) pairs</em></p>
+  <p>Returns an association list of all environment variables
+  currently accessible.</p>
+  <ul>
+    <li>On Unix, declare <code>extern char **environ;</code> and
+    use it. Each null-terminated string in <code>environ</code> is
+    one environment variable in <code>"name=value"</code> format.
+    The name cannot contain an ASCII equals sign; the value may
+    contain any number of them. If there is no equals sign, use the
+    entire string as the name and give <code>#f</code> for the
+    value. Do not cache the value of <code>environ</code>: C code
+    can use <code>environ = calloc(...)</code> to re-establish the
+    environment variable vector at a new location.</li>
+    <li>On Windows NT, use
+    <code>GetEnvironmentStringsW()</code>.</li>
+  </ul>
+  <h3>Command line</h3>
+  <p>(<strong>os-command-line-as-bytevector</strong>) ⇒
+  <em>bytevector?</em></p>
+  <p>Returns the unabridged OS command line as one string. The
+  string is represented as a bytevector.</p>
+  <p>This should return <code>#f</code> unless the OS native
+  command line encoding is one string. It should not manually quote
+  command line arguments and join them into a command line.</p>
+  <ul>
+    <li>On Unix, simply return <code>#f</code>.</li>
+    <li>On Windows NT, use <code>GetCommandLineW()</code>.</li>
+  </ul>
+  <p>(<strong>os-command-line-as-bytevectors</strong>) ⇒ <em>list
+  of bytevectors</em></p>
+  <p>Returns the unabridged OS command line as a list of
+  bytevectors, with one bytevector per command line argument. The
+  zeroth argument (conventionally the program name) is
+  included.</p>
+  <p>If the OS natively stores the entire command line as a single
+  string, the result should be that string as parsed and split
+  according to the canonical parsing algorithm for that OS. Note
+  that this algorithm may be subtly different from the parsing
+  rules used by popular command interpreters (shells).</p>
+  <ul>
+    <li>On Unix, use the <code>argv</code> argument passed to the C
+    <code>main()</code> function. Check whether the zeroth argument
+    <code>argv[0]</code> is <code>NULL</code>; if so, represent it
+    as a zero-length bytevector in Scheme and look for more
+    arguments starting from <code>argv[1]</code>.</li>
+    <li>On Windows NT, use <code>CommandLineToArgvW()</code> to
+    split the string from <code>GetCommandLineW()</code>.</li>
+  </ul>
+  <h3>Executable file</h3>
+  <p>(<strong>os-executable-file-as-bytevector</strong>) ⇒
+  <em>bytevector?</em></p>
+  <p>Returns a pathname pointing to the executable file running the
+  Scheme program. If the Scheme program is running as a standalone
+  executable, this returns the filename of that executable.
+  Otherwise this returns the filename of the executable housing the
+  Scheme implementation. If the Scheme implementation is hosted on
+  top of a virtual machine such as the JVM or the CLR, the
+  executable filename will probably point to that virtual
+  machine.</p>
+  <p><code>#f</code> is returned if no pathname can be retrieved.
+  Some operating systems do not give the information at all. Hence
+  a <code>#f</code> return value is not extraordinary, and portable
+  Scheme code calling this procedure should be prepared to handle
+  it.</p>
+  <p><strong>IMPORTANT:</strong> This problem presents a
+  particularly compelling set of almost-working solutions to lure
+  implementors onto the rocks. At the time of writing there is no
+  correct approach that is even moderately portable. Please be
+  skeptical of any claim that a portable and correct approach
+  exists.</p>
+  <p>In particular, all of the following approaches are
+  incorrect.</p>
+  <ul>
+    <li>Using the current directory (AKA the working directory) is
+    liable to break all the time. Programs other than simple
+    scripts for personal use are rarely started from the directory
+    in which they live; starting programs from arbitrary
+    directories using either <code>PATH</code> lookup or an
+    absolute or relative pathname is common.</li>
+    <li>No <code>argv[0]</code> based approach works properly.
+    <code>argv[0]</code> is simply an arbitrary string passed to
+    <code>execve()</code> in its <em>argv</em> argument. By
+    convention it is the program name. But contrary to popular
+    belief there is no mechanism enforcing that convention.
+    Multi-call binaries such as <code>busybox</code> deliberately
+    take advantage of this lack of enforcement - the same
+    executable can be started with any number of different
+    names.</li>
+    <li>Note that <code>execve()</code> takes separate
+    <em>path</em> and <em>argv</em> arguments. Only <em>path</em>
+    is checked to see that it points to a real file. Lamentably,
+    there is no portable API to retrieve <em>path</em> from within
+    the child process. Only <em>argv</em> retrieval is
+    portable.</li>
+    <li>When a process is started using its command name, with no
+    directory part, directories in <code>PATH</code> are traversed
+    to find a matching executable. Some programs try to find their
+    own executable by replicating a <code>PATH</code> search for
+    <code>argv[0]</code> when <code>argv[0]</code> does not contain
+    a directory part. This does not work for two reasons: it’s
+    trivial to pass a fake <code>argv[0]</code>, and even with a
+    truthful <code>argv[0]</code> the parent process may not have
+    used the same search path that it gave to the child
+    process.</li>
+    <li>Opening a candidate executable to compute a checksum of its
+    bytes and find out whether it is the same as the current
+    executable, presents a chicken-and-egg problem: where do you
+    get the checksum for the current executable to verify against?
+    It is also possible to install multiple copies of the same
+    executable at different locations, in which case their
+    checksums would match but not their filenames.</li>
+  </ul>
+  <p>The following is a partial list of correct approaches at the
+  time of writing.</p>
+  <ul>
+    <li>Darwin (macOS, iOS):
+    <code>_NSGetExecutablePath()</code></li>
+    <li>FreeBSD, DragonFly BSD: <code>sysctl({ CTL_KERN, KERN_PROC,
+    KERN_PROC_PATHNAME, -1 })</code></li>
+    <li>Linux: <code>readlink("/proc/self/exe")</code></li>
+    <li>NetBSD: <code>sysctl({ CTL_KERN, KERN_PROC_ARGS, -1,
+    KERN_PROC_PATHNAME })</code></li>
+    <li>OpenBSD: pathname intentionally unavailable</li>
+    <li>QNX: read (not readlink)
+    <code>/proc/self/exefile</code></li>
+    <li>Solaris: <code>getexecname()</code> or
+    <code>readlink("/proc/self/path/a.out")</code></li>
+    <li>Windows NT: <code>GetModuleFileNameW(NULL)</code></li>
+    <li>Cygwin: readlink <code>/proc/self/exe</code> or read
+    <code>/proc/self/exename</code></li>
+  </ul>
+  <h2>Acknowledgements</h2>
+  <p>Eryk Sun and Daniel Colascione helped me understand how
+  command lines actually work on Windows in theory and practice - a
+  surprisingly complicated topic carrying much historical baggage.
+  With their help, we are able to select the right API functions to
+  retrieve the OS command line on that platform.</p>
+  <p>Gregory Pakosz wrote the <em>whereami</em> library, an
+  instructive collection of OS-specific solutions to the executable
+  filename problem. Many people also left useful clues in various
+  Stack Overflow questions.</p>
+  <h2>References</h2>
+  <p><em>whereami</em> C library by Gregory Pakosz. Retrieved
+  2020-04-19. <a href=
+  "https://github.com/gpakosz/whereami">Link</a></p>
+  <p><em>Everyone quotes command line arguments the wrong way.</em>
+  Daniel Colascione. "Twisty Little Passages, All Alike" / MSDN
+  Blogs. Published 2011-04-23. Retrieved 2020-04-19. <a href=
+  "https://blogs.msdn.microsoft.com/twistylittlepassagesallalike/2011/04/23/everyone-quotes-command-line-arguments-the-wrong-way/">
+  Link</a></p>
+  <p><em>Windows API <code>CommandLineToArgvW</code> function.</em>
+  Retrieved 2020-04-19. <a href=
+  "https://docs.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw">
+  Link</a>.</p>
+  <p><em>environ, execl, execle, execlp, execv, execve, execvp,
+  fexecve - execute a file</em>. The Open Group Base Specifications
+  ("POSIX") Issue 7, 2018 edition. IEEE Std 1003.1-2017 (Revision
+  of IEEE Std 1003.1-2008). <a href=
+  "https://pubs.opengroup.org/onlinepubs/9699919799/functions/execve.html">
+  Link</a></p>
+  <p>Module <a href=
+  "http://api.call-cc.org/5/doc/chicken/process-context"><code>(chicken
+  process-context)</code></a></p>
+  <h2>Copyright</h2>
+  <p>Copyright © Lassi Kortela (2020)</p>
+  <p>Permission is hereby granted, free of charge, to any person
+  obtaining a copy of this software and associated documentation
+  files (the “Software”), to deal in the Software without
+  restriction, including without limitation the rights to use,
+  copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following
+  conditions:</p>
+  <p>The above copyright notice and this permission notice
+  (including the next paragraph) shall be included in all copies or
+  substantial portions of the Software.</p>
+  <p>THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY
+  KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+  WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE
+  AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.</p>
+  <hr>
+  <address>
+    Editor: <a href=
+    "mailto:srfi-editors+at+srfi+dot+schemers+dot+org">Arthur A.
+    Gleckler</a>
+  </address>
+</body>
+</html>
